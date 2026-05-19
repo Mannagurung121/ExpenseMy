@@ -60,3 +60,14 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Secrets & sensitive files
+.env
+secrets/
+GoogleService-Info.plist
+
+# Archives & distribution
+*.xcarchive
+
+# CocoaPods (uncommented)
+Pods/
