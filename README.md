@@ -78,3 +78,4 @@ ExpenseMy automatically parses bank SMS messages using NLP-based text processing
   <img width="220" alt="IMG_7014" src="https://github.com/user-attachments/assets/49139e06-5753-42b5-9d8e-b61ce51c4a69" />
   <img width="220" alt="IMG_7015" src="https://github.com/user-attachments/assets/b6428c09-1e77-49be-9f6c-6e5488a53005" />
 </p>
+
