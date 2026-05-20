@@ -1,0 +1,141 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 1: Scan for accidentally committed secrets
+  # ─────────────────────────────────────────────
+  secret-detection:
+    name: Secret Detection (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history required for TruffleHog git scanning
+
+      - name: TruffleHog scan
+        uses: trufflesecurity/trufflehog-actions-scan@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+  # ─────────────────────────────────────────────
+  # Job 2: Audit Swift Package Manager dependencies
+  # ─────────────────────────────────────────────
+  dependency-audit:
+    name: SPM Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for Package.resolved
+        id: check-resolved
+        run: |
+          if [ -f "Package.resolved" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No Package.resolved found — no SPM dependencies to audit."
+          fi
+
+      - name: Parse and report dependencies
+        if: steps.check-resolved.outputs.found == 'true'
+        run: |
+          echo "=== Swift Package Manager Dependencies ==="
+          python3 - <<'EOF'
+          import json, sys
+
+          with open("Package.resolved") as f:
+              data = json.load(f)
+
+          # Support both v2 and v3 Package.resolved formats
+          pins = data.get("pins") or data.get("object", {}).get("pins", [])
+
+          if not pins:
+              print("No pinned dependencies found.")
+              sys.exit(0)
+
+          print(f"{'Package':<40} {'Version':<20} {'Repository'}")
+          print("-" * 100)
+          for pin in pins:
+              name = pin.get("identity") or pin.get("package", "unknown")
+              version = (
+                  pin.get("state", {}).get("version")
+                  or pin.get("state", {}).get("branch")
+                  or pin.get("state", {}).get("revision", "unknown")
+              )
+              url = pin.get("location") or pin.get("repositoryURL", "")
+              print(f"{name:<40} {version:<20} {url}")
+
+          print()
+          print("NOTE: Automated CVE lookup for SPM packages is not yet available.")
+          print("Manually verify each dependency against https://osv.dev before merging.")
+          EOF
+
+  # ─────────────────────────────────────────────
+  # Job 3: Verify sensitive files are not tracked
+  # ─────────────────────────────────────────────
+  gitignore-verify:
+    name: Sensitive File Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for tracked sensitive files
+        run: |
+          echo "=== Checking for sensitive files in git history ==="
+          FAIL=0
+
+          check_pattern() {
+            local pattern="$1"
+            local label="$2"
+            # Search all commits, not just HEAD
+            matches=$(git log --all --full-history --name-only --format="" -- "$pattern" 2>/dev/null | grep -v '^$' | sort -u || true)
+            if [ -n "$matches" ]; then
+              echo "FAIL: $label found in git history:"
+              echo "$matches"
+              FAIL=1
+            else
+              echo "OK:   $label — not tracked"
+            fi
+          }
+
+          # Firebase / Google Services config
+          check_pattern "*/GoogleService-Info.plist" "GoogleService-Info.plist"
+
+          # Environment files
+          check_pattern "*.env"           ".env files"
+          check_pattern ".env"            ".env (root)"
+          check_pattern "*.env.local"     ".env.local files"
+
+          # Code signing credentials
+          check_pattern "*.p12"           ".p12 certificates"
+          check_pattern "*.mobileprovision" ".mobileprovision profiles"
+
+          # Other common secrets
+          check_pattern "*.key"           "Private key files (.key)"
+          check_pattern "secrets.plist"   "secrets.plist"
+          check_pattern "Secrets.swift"   "Secrets.swift"
+
+          if [ "$FAIL" -eq 1 ]; then
+            echo ""
+            echo "SECURITY FAILURE: Sensitive files found in git history."
+            echo "Remove them with 'git filter-repo' or BFG Repo Cleaner, then force-push."
+            exit 1
+          fi
+
+          echo ""
+          echo "All sensitive file checks passed."
