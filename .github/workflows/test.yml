@@ -1,0 +1,65 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Unit & UI Tests
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -scheme ExpenseMy \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -only-testing:ExpenseMyTests \
+            CODE_SIGNING_ALLOWED=NO \
+            -resultBundlePath TestResults.xcresult \
+            -enableCodeCoverage YES
+
+      - name: Run UI tests
+        run: |
+          xcodebuild test \
+            -scheme ExpenseMy \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -only-testing:ExpenseMyUITests \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: TestResults.xcresult
+          retention-days: 14
+
+      - name: Generate code coverage summary
+        run: |
+          xcrun xccov view --report TestResults.xcresult --json | python3 - <<'EOF'
+          import sys, json
+
+          data = json.load(sys.stdin)
+          targets = data.get("targets", [])
+          for target in targets:
+              if "ExpenseMy" in target.get("name", ""):
+                  covered = target.get("coveredLines", 0)
+                  executable = target.get("executableLines", 0)
+                  if executable > 0:
+                      pct = covered / executable * 100
+                      print(f"Coverage for {target['name']}: {pct:.1f}% ({covered}/{executable} lines)")
+                  else:
+                      print(f"Coverage for {target['name']}: N/A (no executable lines)")
+          EOF
