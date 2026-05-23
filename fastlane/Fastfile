@@ -1,0 +1,168 @@
+default_platform(:ios)
+
+SCHEME       = "ExpenseMy"
+BUNDLE_ID    = "com.REPLACE_ME.ExpenseMy"
+SIMULATOR    = "platform=iOS Simulator,name=iPhone 16,OS=latest"
+WORKSPACE    = "ExpenseMy.xcodeproj"
+
+platform :ios do
+
+  # ---------------------------------------------------------------------------
+  # test — run unit tests on the simulator (no signing required)
+  # Usage: bundle exec fastlane test
+  # ---------------------------------------------------------------------------
+  desc "Run ExpenseMyTests unit tests on iPhone 16 simulator"
+  lane :test do
+    run_tests(
+      scheme:        SCHEME,
+      destination:   SIMULATOR,
+      only_testing:  ["ExpenseMyTests"],
+      code_coverage: true,
+      xcargs:        "CODE_SIGNING_ALLOWED=NO",
+      output_files:  "test-results.xml"
+    )
+  end
+
+  # ---------------------------------------------------------------------------
+  # build — produce an unsigned simulator build (no Apple credentials needed)
+  # Usage: bundle exec fastlane build
+  # ---------------------------------------------------------------------------
+  desc "Build an unsigned IPA for simulator"
+  lane :build do
+    # gym (build_app) does not support simulator IPAs directly;
+    # we shell out to xcodebuild for a clean simulator build.
+    sh(
+      "xcodebuild build " \
+      "-scheme #{SCHEME} " \
+      "-destination '#{SIMULATOR}' " \
+      "CODE_SIGNING_ALLOWED=NO " \
+      "COMPILER_INDEX_STORE_ENABLE=NO " \
+      "-quiet"
+    )
+    UI.success("Simulator build succeeded.")
+  end
+
+  # ---------------------------------------------------------------------------
+  # beta — sign and upload to TestFlight
+  #
+  # Required environment variables (set in CI secrets or .env.beta):
+  #   APPLE_ID              — your Apple ID email (apple_id in Appfile)
+  #   TEAM_ID               — 10-character Apple Developer team ID
+  #   APP_SPECIFIC_PASSWORD — app-specific password from appleid.apple.com
+  #   MATCH_PASSWORD        — passphrase that encrypts the Match certificate repo
+  #
+  # Usage: bundle exec fastlane beta
+  # ---------------------------------------------------------------------------
+  desc "Build signed IPA and upload to TestFlight"
+  lane :beta do
+    # Sync development & distribution certificates from the private Match repo.
+    # MATCH_PASSWORD is used to decrypt the encrypted certificates.
+    match(
+      type:           "appstore",
+      app_identifier: BUNDLE_ID,
+      git_url:        ENV["MATCH_GIT_URL"], # set to your certificates repo URL
+      password:       ENV["MATCH_PASSWORD"],
+      readonly:       true                  # never create new certs in CI
+    )
+
+    # Bump the build number to the current CI run number (or timestamp locally).
+    build_number = ENV.fetch("GITHUB_RUN_NUMBER", Time.now.to_i.to_s)
+    increment_build_number(build_number: build_number)
+
+    # Build a signed IPA for distribution.
+    gym(
+      scheme:                 SCHEME,
+      configuration:          "Release",
+      export_method:          "app-store",
+      output_directory:       "build",
+      output_name:            "ExpenseMy.ipa",
+      include_bitcode:        false,
+      include_symbols:        true,
+      suppress_xcode_output:  true
+    )
+
+    # Upload to TestFlight.
+    # pilot (upload_to_testflight) reads APPLE_ID and APP_SPECIFIC_PASSWORD
+    # from environment variables set above.
+    pilot(
+      apple_id:             BUNDLE_ID,
+      username:             ENV["APPLE_ID"],
+      team_id:              ENV["TEAM_ID"],
+      ipa:                  "build/ExpenseMy.ipa",
+      skip_waiting_for_build_processing: true,
+      distribute_external:  false,
+      notify_external_testers: false,
+      changelog:            "Beta build from CI — branch #{ENV.fetch('GITHUB_REF_NAME', 'unknown')}"
+    )
+
+    UI.success("Beta build uploaded to TestFlight successfully.")
+  end
+
+  # ---------------------------------------------------------------------------
+  # release — submit to the App Store for review
+  #
+  # Required environment variables (same as beta, plus):
+  #   APPLE_ID              — your Apple ID email
+  #   TEAM_ID               — 10-character Apple Developer team ID
+  #   APP_SPECIFIC_PASSWORD — app-specific password from appleid.apple.com
+  #   MATCH_PASSWORD        — Match certificate repo passphrase
+  #
+  # Usage: bundle exec fastlane release
+  # ---------------------------------------------------------------------------
+  desc "Build signed IPA and submit to App Store for review"
+  lane :release do
+    # TODO: Add any pre-release checks here (e.g., ensure changelog is set,
+    #       version number is bumped, screenshots are up to date).
+
+    # Sync distribution certificates.
+    match(
+      type:           "appstore",
+      app_identifier: BUNDLE_ID,
+      git_url:        ENV["MATCH_GIT_URL"],
+      password:       ENV["MATCH_PASSWORD"],
+      readonly:       true
+    )
+
+    # TODO: bump_version_number if desired.
+    # increment_version_number(version_number: "1.x.0")
+
+    # Build a signed IPA for App Store distribution.
+    gym(
+      scheme:                SCHEME,
+      configuration:         "Release",
+      export_method:         "app-store",
+      output_directory:      "build",
+      output_name:           "ExpenseMy-release.ipa",
+      include_bitcode:       false,
+      include_symbols:       true,
+      suppress_xcode_output: true
+    )
+
+    # Deliver (upload_to_app_store) submits the IPA, metadata, and screenshots.
+    # TODO: populate fastlane/metadata/ and fastlane/screenshots/ before enabling.
+    deliver(
+      username:             ENV["APPLE_ID"],
+      team_id:              ENV["TEAM_ID"],
+      ipa:                  "build/ExpenseMy-release.ipa",
+      submit_for_review:    true,
+      automatic_release:    false,          # set true to auto-release after approval
+      force:                true,           # skip HTML report
+      skip_metadata:        false,          # set true until metadata folder is ready
+      skip_screenshots:     false,          # set true until screenshots folder is ready
+      submission_information: {
+        add_id_info_limits_tracking:        true,
+        add_id_info_serves_ads:             false,
+        add_id_info_tracks_action:          false,
+        add_id_info_tracks_install:         false,
+        add_id_info_uses_idfa:              false,
+        content_rights_has_rights:          true,
+        content_rights_contains_third_party_content: false,
+        export_compliance_platform:         "ios",
+        export_compliance_compliance_required: false
+      }
+    )
+
+    UI.success("App submitted to App Store for review.")
+  end
+
+end
