@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    PrivacyInfo.xcprivacy — Apple Privacy Manifest for ExpenseMy
+    ============================================================
+
+    WHAT THIS FILE IS
+    Apple's Privacy Manifest is a property list that declares, in a
+    machine-readable form, the privacy practices of the app and its
+    bundled code. Xcode aggregates this manifest with the manifests of
+    every linked SDK to produce the "Privacy Report" surfaced in App
+    Store Connect and to enforce the "required reason API" policy.
+
+    WHY IT IS MANDATORY
+    Since 1 May 2024, App Store submissions are rejected if an app (or a
+    "commonly used" third-party SDK it links) uses a required-reason API
+    without declaring an approved reason here. The manifest also feeds the
+    Privacy Nutrition Label. iOS 17 is the baseline for the tooling that
+    reads this file.
+
+    PLACEMENT
+    This file must be added to the ExpenseMy app target (Target
+    Membership → ExpenseMy) and copied into the app bundle root. The
+    Share Extension (ExpenseMyShare) should ship its own manifest if it
+    ever uses a required-reason API; today it only moves data through the
+    App Group container and adds none.
+
+    KEY POINT ABOUT "COLLECTION"
+    Apple defines "data collection" as transmitting data off the device
+    in a way that is linkable to the user/device. ExpenseMy is local-only:
+    transaction data never leaves the device, so strictly it is NOT
+    "collected" under Apple's definition. We still document the data types
+    below (with explanatory comments) so the manifest is ready the moment
+    Firebase Analytics or cloud sync is enabled — at which point the
+    relevant entries must be reviewed and the "device only" caveat
+    removed. See docs/privacy-compliance.md for the full rationale.
+-->
+<plist version="1.0">
+<dict>
+
+    <!-- ===================================================================
+         NSPrivacyTracking
+         "Tracking" (per Apple/ATT) means linking this app's data with
+         data from other companies' apps/websites for targeted advertising
+         or sharing with data brokers. ExpenseMy does none of this, so this
+         is false. When false, the app must NOT call ATT / use IDFA for
+         cross-app tracking.
+         =================================================================== -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+
+    <!-- ===================================================================
+         NSPrivacyTrackingDomains
+         The list of internet domains the app connects to that engage in
+         tracking. Because NSPrivacyTracking is false, this array MUST be
+         empty (Apple rejects a non-empty list when tracking is false).
+         ExpenseMy makes no network calls today.
+         =================================================================== -->
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+
+    <!-- ===================================================================
+         NSPrivacyCollectedDataTypes
+         An array of dictionaries, one per category of data the app
+         collects. Each entry declares:
+           • NSPrivacyCollectedDataType         — the data type identifier
+           • NSPrivacyCollectedDataTypeLinked   — linked to user identity?
+           • NSPrivacyCollectedDataTypeTracking — used for tracking?
+           • NSPrivacyCollectedDataTypePurposes — why it is collected
+
+         NOTE: ExpenseMy stores everything on-device. The entries below
+         describe the data the app *handles* and document the intended
+         declarations for when off-device transmission (Firebase / cloud
+         sync) is turned on. Until then, Apple would technically accept an
+         empty array. We keep them documented for audit readiness.
+         =================================================================== -->
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array>
+
+        <!-- Transaction data — parsed amount, merchant, bank, category.
+             Mapped to "Other Financial Info". It is linked to the user
+             (it is their personal financial history) but is stored ONLY on
+             the device and is never used for tracking. Purpose is core app
+             functionality (showing the user their own spending). -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeOtherFinancialInfo</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!-- Usage / product-interaction data — screen views, feature taps.
+             Collected ONLY when Firebase Analytics is linked and a real
+             GoogleService-Info.plist is present (the AnalyticsService is a
+             no-op stub otherwise). Not linked to user identity (no account
+             system) and never used for tracking. Purpose is Analytics. -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeProductInteraction</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+            </array>
+        </dict>
+
+    </array>
+
+    <!-- ===================================================================
+         NSPrivacyAccessedAPITypes
+         Declares each "required reason API" the app's own code uses, with
+         an Apple-approved reason code. Every entry is:
+           • NSPrivacyAccessedAPIType        — the API category
+           • NSPrivacyAccessedAPITypeReasons — array of approved reason codes
+         Reason codes are fixed strings published by Apple; using an
+         unlisted reason is grounds for rejection.
+         =================================================================== -->
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+
+        <!-- User Defaults API.
+             ExpenseMy uses UserDefaults (directly and via
+             SecureStorageService / the App Group suite) for non-sensitive
+             preferences such as the selected theme, last filter, and the
+             onboarding-completed flag.
+             Reason CA92.1: "Access info from same app, per documentation."
+             i.e. the data stored is only read back by this app (and its
+             own app-group extension), never shared with other developers'
+             code. This is the correct reason for first-party preferences. -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+
+        <!-- File timestamp APIs.
+             SwiftData (and Foundation file operations) read file creation
+             and modification timestamps of the on-device store. Apple
+             classes these accessors as required-reason APIs.
+             Reason DDA9.1: "Access timestamps of files inside the app's
+             own container, app group container, or CloudKit container."
+             The SwiftData store lives in the app's sandboxed Application
+             Support directory, so DDA9.1 applies. -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>DDA9.1</string>
+            </array>
+        </dict>
+
+    </array>
+
+</dict>
+</plist>
