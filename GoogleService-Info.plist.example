@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    GoogleService-Info.plist.example — TEMPLATE ONLY
+    ================================================
+
+    This is a TEMPLATE. It documents the keys Firebase expects so the shape of
+    the real file is visible in source control without committing any secrets.
+
+    The REAL GoogleService-Info.plist is downloaded from the Firebase Console
+    (Project Settings → Your apps → iOS app → Download GoogleService-Info.plist)
+    and dropped into the ExpenseMy app group in Xcode. See docs/firebase-setup.md.
+
+    DO:
+      • Copy this to GoogleService-Info.plist and replace every REPLACE_ME value,
+        OR (preferred) download the real file from the Firebase Console.
+      • Keep the real file OUT of git — it is already in .gitignore, and the
+        security-scan.yml workflow fails the build if it is ever tracked.
+
+    NOTE: Firebase iOS API keys identify the project rather than grant admin
+    access, but they should still be treated as semi-sensitive (restrict by
+    bundle ID in Google Cloud Console to prevent quota abuse). The app's
+    Firebase service wrappers are conditionally compiled, so the app builds and
+    runs fine WITHOUT this file — the services simply become no-op stubs.
+
+    The bundle ID below must match the ExpenseMy target's PRODUCT_BUNDLE_IDENTIFIER
+    (currently `learns.ExpenseMy`).
+-->
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>REPLACE_ME</string>
+	<key>GCM_SENDER_ID</key>
+	<string>REPLACE_ME</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>learns.ExpenseMy</string>
+	<key>PROJECT_ID</key>
+	<string>REPLACE_ME</string>
+	<key>STORAGE_BUCKET</key>
+	<string>REPLACE_ME.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<true/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<true/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:REPLACE_ME:ios:REPLACE_ME</string>
+	<key>DATABASE_URL</key>
+	<string>https://REPLACE_ME.firebaseio.com</string>
+</dict>
+</plist>
