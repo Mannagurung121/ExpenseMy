@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Extract version from tag
+        run: |
+          # Strip the leading 'v' from the tag name (e.g. v1.2.3 → 1.2.3)
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "Releasing version: ${VERSION}"
+
+      - name: Extract changelog for this version
+        run: |
+          # Grab everything between "## [VERSION]" and the next "## [" header.
+          # awk starts printing after it finds the version header and stops at
+          # the next header, so we get exactly that release's notes.
+          VERSION="${{ env.VERSION }}"
+          CHANGELOG=$(awk \
+            "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" \
+            CHANGELOG.md)
+
+          if [ -z "$CHANGELOG" ]; then
+            echo "WARNING: No changelog entry found for version ${VERSION}"
+            CHANGELOG="See CHANGELOG.md for details."
+          fi
+
+          # Write to a temp file to preserve newlines when passing to the next step
+          echo "$CHANGELOG" > /tmp/release-notes.txt
+          echo "Extracted changelog:"
+          cat /tmp/release-notes.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          name: ExpenseMy ${{ env.VERSION }}
+          body_path: /tmp/release-notes.txt
+          draft: false
+          prerelease: false
+          # Any .ipa or .xcarchive artifacts dropped in the workspace root are
+          # automatically uploaded here. Add build steps above this step to
+          # produce artifacts before this runs.
+          files: |
+            *.ipa
+            *.xcarchive
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Post-release notification
+    runs-on: macos-15
+    needs: release
+
+    steps:
+      - name: Post release summary
+        run: |
+          echo "============================================"
+          echo "  Release ${{ github.ref_name }} published!"
+          echo "  Repo:  ${{ github.repository }}"
+          echo "  Actor: ${{ github.actor }}"
+          echo "  URL:   https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          echo "============================================"
+          # TODO: replace the echo above with a real webhook call, e.g.:
+          # curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+          #   -H 'Content-type: application/json' \
+          #   --data "{\"text\": \"ExpenseMy ${{ github.ref_name }} released! <https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}|View release>\"}"
+          #
+          # For Discord:
+          # curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+          #   -H 'Content-type: application/json' \
+          #   --data "{\"content\": \"ExpenseMy ${{ github.ref_name }} released!\"}"
