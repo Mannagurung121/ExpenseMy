@@ -1,0 +1,65 @@
+name: Version Check
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  changelog-check:
+    name: Verify CHANGELOG.md is updated
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check that CHANGELOG.md was modified in this PR
+        run: |
+          # Compare the PR's base branch against the HEAD of this PR branch.
+          # git diff --name-only lists every file changed; grep checks for CHANGELOG.md.
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED_FILES=$(git diff --name-only "${BASE}" "${HEAD}")
+          echo "Files changed in this PR:"
+          echo "$CHANGED_FILES"
+
+          if ! echo "$CHANGED_FILES" | grep -q "^CHANGELOG.md$"; then
+            echo ""
+            echo "ERROR: CHANGELOG.md must be updated with your changes."
+            echo "See https://keepachangelog.com"
+            echo ""
+            echo "Add your changes under the [Unreleased] section in CHANGELOG.md"
+            echo "using one of: Added, Changed, Deprecated, Removed, Fixed, Security"
+            exit 1
+          fi
+
+          echo "CHANGELOG.md was modified. Good."
+
+      - name: Check that [Unreleased] section has content
+        run: |
+          # Extract everything between "## [Unreleased]" and the next "## [" header.
+          # Then strip blank lines and section headings (### Added, etc.) to test
+          # whether any actual content was written.
+          UNRELEASED=$(awk \
+            '/^## \[Unreleased\]/{found=1; next} found && /^## \[/{exit} found{print}' \
+            CHANGELOG.md)
+
+          # Remove lines that are pure whitespace or are sub-headings (### ...)
+          CONTENT=$(echo "$UNRELEASED" | grep -v '^\s*$' | grep -v '^###')
+
+          if [ -z "$CONTENT" ]; then
+            echo ""
+            echo "ERROR: The [Unreleased] section in CHANGELOG.md is empty."
+            echo "Please document your changes under [Unreleased] before merging."
+            echo "See https://keepachangelog.com"
+            exit 1
+          fi
+
+          echo "Content found in [Unreleased] section:"
+          echo "$CONTENT"
+          echo ""
+          echo "Version check passed."
