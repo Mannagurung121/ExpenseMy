@@ -1,0 +1,121 @@
+name: SonarCloud Analysis
+
+# REQUIRES: SonarCloud account linked to this repo. See docs/sonarcloud-setup.md
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so SonarCloud can assign issues to the right authors
+          # and compute new-code metrics across the PR base.
+          fetch-depth: 0
+
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build and test with coverage
+        run: |
+          xcodebuild test \
+            -scheme ExpenseMy \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -resultBundlePath SonarResults.xcresult \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Generate coverage conversion script
+        # Generated inline to keep the workflow self-contained without
+        # committing a separate file. Must run BEFORE the conversion step.
+        run: |
+          cat > scripts_inline_xccov_to_sonar.py <<'PYEOF'
+          import json
+          import subprocess
+          import xml.sax.saxutils as sax
+
+          XCRESULT = "SonarResults.xcresult"
+          OUTPUT = "sonarqube-generic-coverage.xml"
+
+          with open("coverage.json") as f:
+              report = json.load(f)
+
+          # Collect every source file path from the JSON report's targets.
+          file_paths = []
+          for target in report.get("targets", []):
+              for file_entry in target.get("files", []):
+                  path = file_entry.get("path")
+                  if path and path.endswith(".swift"):
+                      file_paths.append(path)
+
+          lines_out = ['<coverage version="1">']
+          for path in sorted(set(file_paths)):
+              # Per-line hit counts for this file. Format per line:
+              #   "<lineNumber>: <count>"  where count "*" means non-executable.
+              try:
+                  raw = subprocess.check_output(
+                      ["xcrun", "xccov", "view", "--archive", "--file", path, XCRESULT],
+                      text=True,
+                  )
+              except subprocess.CalledProcessError:
+                  continue
+
+              line_elems = []
+              for line in raw.splitlines():
+                  parts = line.split(":", 1)
+                  if len(parts) != 2:
+                      continue
+                  num_str, count_str = parts[0].strip(), parts[1].strip()
+                  if not num_str.isdigit():
+                      continue
+                  count_token = count_str.split()[0] if count_str else "*"
+                  if count_token == "*":
+                      continue  # non-executable line, skip
+                  covered = "true" if count_token not in ("0", "") else "false"
+                  line_elems.append(
+                      f'    <lineToCover lineNumber="{num_str}" covered="{covered}"/>'
+                  )
+
+              if line_elems:
+                  lines_out.append(f'  <file path="{sax.escape(path)}">')
+                  lines_out.extend(line_elems)
+                  lines_out.append("  </file>")
+
+          lines_out.append("</coverage>")
+
+          with open(OUTPUT, "w") as f:
+              f.write("\n".join(lines_out) + "\n")
+
+          print(f"Wrote {OUTPUT} with coverage for {len(set(file_paths))} files.")
+          PYEOF
+
+      - name: Convert xcresult coverage to SonarQube generic format
+        # SonarCloud's Swift analyzer ingests coverage in the "generic" XML
+        # format. Xcode emits coverage inside an .xcresult bundle, so we:
+        #   1. `xccov view --report --json` lists every covered file.
+        #   2. For each file, `xccov view --archive --file` prints per-line hit
+        #      counts, which the script maps to <lineToCover> elements.
+        run: |
+          xcrun xccov view --report --json SonarResults.xcresult > coverage.json
+          python3 scripts_inline_xccov_to_sonar.py
+
+      - name: Install sonar-scanner
+        run: brew install sonar-scanner
+
+      - name: Run SonarCloud scan
+        env:
+          # SONAR_TOKEN: add in repo Settings → Secrets and variables → Actions.
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # GITHUB_TOKEN lets SonarCloud decorate the PR with inline findings.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sonar-scanner
