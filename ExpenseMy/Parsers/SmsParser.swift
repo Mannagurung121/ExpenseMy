@@ -1,11 +1,4 @@
-//
-//  SmsParser.swift
-//  ExpenseMy
-//
-//  Created by Manan Gurung on 06/05/26.
-//
 
-// SMSParser.swift
 import Foundation
 
 struct SMSParser {

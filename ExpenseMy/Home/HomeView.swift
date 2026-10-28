@@ -1,49 +1,40 @@
-//
-//  HomeView.swift
-//  ExpenseMy
-//
-//  Created by Manan Gurung on 06/05/26.
-//
-
 import SwiftUI
+import SwiftData
 
 struct HomeView: View {
-
     var body: some View {
+        mainTabView
+    }
 
+    private var mainTabView: some View {
         TabView {
-
             DashboardView()
                 .tabItem {
-
-                    Label(
-                        "Dashboard",
-                        systemImage: "chart.pie.fill"
-                    )
+                    Label("Home", systemImage: "chart.pie.fill")
                 }
 
-            TransactionListView()
-                .tabItem {
-
-                    Label(
-                        "Transactions",
-                        systemImage: "list.bullet"
-                    )
-                }
+            NavigationStack {
+                TransactionListView()
+            }
+            .tabItem {
+                Label("Transactions", systemImage: "list.bullet")
+            }
 
             AddTransactionView()
                 .tabItem {
+                    Label("Add SMS", systemImage: "plus.circle.fill")
+                }
 
-                    Label(
-                        "Add SMS",
-                        systemImage: "plus.circle.fill"
-                    )
+            ProfileView()
+                .tabItem {
+                    Label("Profile", systemImage: "person.circle.fill")
                 }
         }
+        .tint(.purple)
     }
 }
 
 #Preview {
-
     HomeView()
+        .modelContainer(for: Transaction.self, inMemory: true)
 }

@@ -1,9 +1,4 @@
-//
-//  ShareViewController.swift
-//  ExpenseMy
-//
-//  Created by Manan Gurung on 07/05/26.
-//
+
 
 import UIKit
 import SwiftUI

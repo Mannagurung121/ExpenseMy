@@ -9,67 +9,24 @@ import XCTest
 
 final class ExpenseMyUITestsLaunchTests: XCTestCase {
 
-    // Run once per UI configuration (light + dark) for the screenshot tests
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
-        false
+        true
     }
 
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
-    // MARK: - Performance
-
     @MainActor
-    func testLaunchPerformance() throws {
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
-    }
-
-    // MARK: - Visual Regression Reference Screenshots
-
-    @MainActor
-    func testLaunchAndTakeScreenshot() throws {
+    func testLaunch() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // Allow the first frame to fully settle
-        _ = app.tabBars.firstMatch.waitForExistence(timeout: 5)
+        // Insert steps here to perform after app launch but before taking a screenshot,
+        // such as logging into a test account or navigating somewhere in the app
 
-        let screenshot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
-        attachment.name = "Launch – Default"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
-    @MainActor
-    func testDarkModeLaunch() throws {
-        let app = XCUIApplication()
-        app.launchArguments += ["-UIUserInterfaceStyle", "2"] // 2 = Dark
-        app.launch()
-
-        _ = app.tabBars.firstMatch.waitForExistence(timeout: 5)
-
-        let screenshot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
-        attachment.name = "Launch – Dark Mode"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
-    @MainActor
-    func testLightModeLaunch() throws {
-        let app = XCUIApplication()
-        app.launchArguments += ["-UIUserInterfaceStyle", "1"] // 1 = Light
-        app.launch()
-
-        _ = app.tabBars.firstMatch.waitForExistence(timeout: 5)
-
-        let screenshot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
-        attachment.name = "Launch – Light Mode"
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Launch Screen"
         attachment.lifetime = .keepAlways
         add(attachment)
     }

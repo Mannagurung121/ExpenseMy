@@ -1,9 +1,3 @@
-//
-//  Transactions.swift
-//  ExpenseMy
-//
-//  Created by Manan Gurung on 06/05/26.
-//
 
 import SwiftData
 import Foundation
